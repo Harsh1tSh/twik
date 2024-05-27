@@ -1,12 +1,15 @@
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Advocate
-from .serializers import AdvocateSeriaizer
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
+from rest_framework import status
+
+from .models import Advocate, Company
+from .serializers import AdvocateSeriaizer, CompanySerializer
+
 # Create your views here.
 @api_view(["GET"])
 def endpoints(request):
@@ -36,32 +39,29 @@ def advocates_list(request):
 
 
 class AdvocateDetail(APIView):
-
     def get_object(self, username):
         try:
             return Advocate.objects.get(username=username)
         except Advocate.DoesNotExist:
-            raise Advocate
+            raise Http404("Advocate doesn't exist.")
 
     def get(self, request, username):
-        advocate = get_object_or_404(Advocate, username__iexact=username)
+        advocate = self.get_object(username)
         serializer = AdvocateSeriaizer(advocate, many=False)
         return Response(serializer.data)
-    
+
     def put(self, request, username):
-        advocate = get_object_or_404(Advocate, username__iexact=username)
-        advocate.username = request.data['username']
-        advocate.bio = request.data['bio']
-        advocate.save()
+        advocate = self.get_object(username)
         serializer = AdvocateSeriaizer(advocate, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def delete(self, request, username):
-        advocate = get_object_or_404(Advocate, username__iexact=username)
+        advocate = self.get_object(username)
         advocate.delete()
-        return Response("User was deleted")
+        return Response(status=status.HTTP_204_NO_CONTENT)
         
 
 
@@ -84,3 +84,9 @@ class AdvocateDetail(APIView):
 #     if request.method == "DELETE":
 #         advocate.delete()
 #         return Response("User was deleted")
+
+@api_view(["GET"])
+def companies_list(request):
+    companies = Company.objects.all()
+    serializer = CompanySerializer(companies, many=True)
+    return Response(serializer.data)
